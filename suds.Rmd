@@ -1,0 +1,90 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r}
+library(tidyverse)
+library(shiny)
+census = read.csv("Allegheny.csv")
+census
+```
+
+
+
+```{r}
+tracts = ggplot()
+for(i in 1:3217){
+  ct = data.frame(sf@polygons[[i]]@Polygons[[1]]@coords)
+  if(sum(sf$GEOID[i]==census$GEO.id2)==1){
+    income = census$HC01_EST_VC13[as.numeric(as.vector(sf$GEOID[i]))]
+    tracts = tracts+geom_polygon(data = ct,aes(x = X1, y = X2), colour = "black",fill="green")
+  }
+}
+tracts
+```
+
+
+```{r}
+library(rgdal)
+sf = readOGR("cb_2017_42_tract_500k.shp")
+sf
+```
+
+```{r}
+allegheny = rep(NA,402)
+places = rep(NA,402)
+j = 0
+for(i in 1:3217){
+  if(sum(sf$GEOID[i]==census$GEO.id2)==1){
+    j = j+1
+    allegheny[j] = i
+  }
+}
+length(allegheny)
+colors = rep("green",402)
+locs = census$GEO.display.label
+```
+
+```{r}
+ui <- basicPage(
+  plotOutput("plot1", click = "plot_click"),
+  verbatimTextOutput("info")
+)
+
+server <- function(input, output) {
+  output$plot1 <- renderPlot({
+    tracts = ggplot()
+    index = 0
+    for(i in allegheny){
+      index = index+1
+      ct = data.frame(sf@polygons[[i]]@Polygons[[1]]@coords)
+      tract = geom_polygon(data = ct,aes(x = X1, y = X2), colour = "black",fill=colors[index])
+      tracts = tracts + tract
+    }
+    tracts
+  },height=400,width=400)
+
+  output$info <- renderText({
+    X = input$plot_click$x
+    Y = input$plot_click$y
+    clicked = NA
+    for(i in allegheny){
+      ct = data.frame(sf@polygons[[i]]@Polygons[[1]]@coords)
+      c1 = min(ct$X1)<=X
+      c2 = X<=max(ct$X1)
+      c3 = min(ct$X2)<=Y
+      c4 = Y<=max(ct$X2)
+      if(c1+c2+c3+c4==4){
+        clicked = i
+      }
+    }
+    S = which(census$GEO.id2==sf$GEOID[clicked])[[1]]
+    paste0(clicked,census$GEO.display.label[S])
+  })
+}
+
+shinyApp(ui, server)
+```
